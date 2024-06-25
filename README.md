@@ -10,17 +10,13 @@ All attorneys must first receive approval from a [DAO](https://www.investopedia.
 
 To join the Lawyer Approval DAO, members must stake a minimum number of xlRan tokens that represent their voting power within the platform. By doing so, members contribute to the decision-making process for approving attorneys.
 
-### Earning Opportunities
+As part of the attorney membership process, candidates are required to upload their credentials in advance. These credentials are reviewed by the DAO members to verify that the membership requirements are met and maintained. Voting power within the DAO is proportional to the amount of staked xlRan tokens.
 
-Upon an attorney's approval, members who have staked tokens will be entitled to a fixed percentage of the attorney's earnings on the platform. This ensures that members are rewarded for their active participation and decision-making contributions.
-
-### Uploading Credentials
-
-As part of the membership process, candidates are required to upload their credentials in advance. These credentials are reviewed by the DAO to verify that the membership requirements are met and maintained.
+Upon an attorney's approval, members who have voted for that candidate will be entitled to a small fixed percentage of the attorney's earnings on the platform. This ensures that members are rewarded for their active participation and decision-making contributions.
 
 ### Uploading Cases
 
-Once you have been approved, you can start uploading detailed case summaries and their locations. These summaries must contain enough information for predictions to be made, but please make sure to remove any personal details to ensure anonymity. Please note that uploading any personal details with the case summary will result in an immediate lifetime ban from the platform.
+Once you have been approved as a lawyer, you can start uploading detailed case summaries and their locations. These summaries must contain enough information for predictions to be made, but please make sure to remove any personal details to ensure anonymity. Please note that uploading any personal details with the case summary will result in an immediate lifetime ban from the platform.
 
 ### Case Oracle
 
