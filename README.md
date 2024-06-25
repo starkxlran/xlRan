@@ -12,7 +12,7 @@ To join the Lawyer Approval DAO, members must stake a minimum number of xlRan to
 
 As part of the attorney membership process, candidates are required to upload their credentials in advance. These credentials are reviewed by the DAO members to verify that the membership requirements are met and maintained. Voting power within the DAO is proportional to the amount of staked xlRan tokens.
 
-Upon an attorney's approval, members who have voted for that candidate will be entitled to a small fixed percentage of the attorney's earnings on the platform. This ensures that members are rewarded for their active participation and decision-making contributions.
+Upon an attorney's approval, DAO members who have voted for that candidate will be entitled to a small fixed percentage of the attorney's earnings on the platform. This ensures that members are rewarded for their active participation and decision-making contributions.
 
 ### Uploading Cases
 
