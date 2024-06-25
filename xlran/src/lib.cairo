@@ -4,7 +4,7 @@ use starknet::ContractAddress;
 trait Ixlran<TContractState> {
     fn register_dao_amount(ref self: TContractState, stake_amount: u64);
     fn register_lawyer(ref self: TContractState, lawyer_address: ContractAddress, ipfs_hash: ByteArray);
-    fn register_case(ref self: TContractState, case_ipfs_hash: ByteArray, case_pred: bool);
+    fn register_case(ref self: TContractState, case_ipfs_hash: ByteArray, case_pred: bool, reputation_staked: u64);
     fn ban_lawyer(ref self: TContractState, lawyer_address: ContractAddress);
     fn vote_lawyer(ref self: TContractState, lawyer_address: ContractAddress);
     fn approve_lawyer(ref self: TContractState, lawyer_address: ContractAddress);
@@ -49,7 +49,9 @@ mod xlran {
         banned: bool,
         votes: u64,
         case_count: u64,
-        case_correctly_pred: u64
+        case_correctly_pred: u64,
+        reputation: u64,
+        reputation_points_available: u64
     }
 
     #[derive(Drop, Serde, starknet::Store)]
@@ -65,7 +67,8 @@ mod xlran {
         case_ipfs_hash: ByteArray,
         case_status: u8,
         created_at: u64,
-        case_pred: bool
+        case_pred: bool,
+        reputation_staked: u64
     }
 
     #[derive(Drop, starknet::Event)]
@@ -135,24 +138,34 @@ mod xlran {
                 banned: false,
                 votes: 0,
                 case_count: 0,
-                case_correctly_pred: 0
+                case_correctly_pred: 0,
+                reputation: 0,
+                reputation_points_available: 100
             };
             self.lawyers.write(lawyer_address, lawyer.clone());
             self.emit(lawyer);
         }
 
-        fn register_case(ref self: ContractState, case_ipfs_hash: ByteArray, case_pred: bool) {
+        fn register_case(ref self: ContractState, case_ipfs_hash: ByteArray, case_pred: bool, reputation_staked: u64) {
             let lawyer_address = get_caller_address();
-            let lawyer_info = self.lawyers.read(lawyer_address);
+            let mut lawyer_info = self.lawyers.read(lawyer_address);
+
             assert!(lawyer_info.approved, "Lawyer not approved");
+            assert!(lawyer_info.reputation_points_available>=reputation_staked, "Not enough reputation stake left");
+
+            lawyer_info.reputation_points_available -= reputation_staked;
+            self.lawyers.write(lawyer_address, lawyer_info);
+
             let case_id = self.case_id.read();
             let case = Case {
                 lawyer_address: lawyer_address,
                 case_ipfs_hash: case_ipfs_hash,
                 case_status: 0,
                 created_at: get_block_timestamp(),
-                case_pred: case_pred
+                case_pred: case_pred,
+                reputation_staked: reputation_staked
             };
+
             self.cases.write(case_id, case.clone());
             self.case_id.write(case_id + 1);
             self.emit(case);
@@ -216,8 +229,12 @@ mod xlran {
 
             let mut lawyer_info = self.lawyers.read(lawyer);
             lawyer_info.case_count += 1;
+            lawyer_info.reputation_points_available += case.reputation_staked;
             if(case.case_pred==case_won){
                 lawyer_info.case_correctly_pred += 1;
+                lawyer_info.reputation += case.reputation_staked;
+            }else{
+                lawyer_info.reputation -= case.reputation_staked;
             };
             self.lawyers.write(lawyer, lawyer_info);
             self.emit(CaseResolved {
