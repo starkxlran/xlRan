@@ -1,10 +1,10 @@
 use starknet::ContractAddress;
 
 #[starknet::interface]
-trait Ixlran<TContractState> {
+pub trait Ixlran<TContractState> {
     fn register_dao_amount(ref self: TContractState, stake_amount: u64);
-    fn register_lawyer(ref self: TContractState, lawyer_address: ContractAddress, ipfs_hash: ByteArray);
-    fn register_case(ref self: TContractState, case_ipfs_hash: ByteArray, case_pred: bool, reputation_staked: u64);
+    fn register_lawyer(ref self: TContractState, ipfs_hash: ByteArray) -> ContractAddress;
+    fn register_case(ref self: TContractState, case_ipfs_hash: ByteArray, case_pred: bool, reputation_staked: u64) -> u64;
     fn ban_lawyer(ref self: TContractState, lawyer_address: ContractAddress);
     fn vote_lawyer(ref self: TContractState, lawyer_address: ContractAddress);
     fn approve_lawyer(ref self: TContractState, lawyer_address: ContractAddress);
@@ -131,7 +131,9 @@ mod xlran {
             });
         }
 
-        fn register_lawyer(ref self: ContractState, lawyer_address: ContractAddress, ipfs_hash: ByteArray) {
+        fn register_lawyer(ref self: ContractState, ipfs_hash: ByteArray) -> ContractAddress{
+            let lawyer_address = get_caller_address();
+            assert!(self.lawyers.read(lawyer_address).banned==false,"Lawyer is banned from joining or performing any contract actions!");
             let lawyer = LawyerInfo {
                 ipfs_hash: ipfs_hash.clone(),
                 approved: false,
@@ -144,13 +146,15 @@ mod xlran {
             };
             self.lawyers.write(lawyer_address, lawyer.clone());
             self.emit(lawyer);
+            return lawyer_address;
         }
 
-        fn register_case(ref self: ContractState, case_ipfs_hash: ByteArray, case_pred: bool, reputation_staked: u64) {
+        fn register_case(ref self: ContractState, case_ipfs_hash: ByteArray, case_pred: bool, reputation_staked: u64) -> u64{
             let lawyer_address = get_caller_address();
             let mut lawyer_info = self.lawyers.read(lawyer_address);
 
             assert!(lawyer_info.approved, "Lawyer not approved");
+            assert!(lawyer_info.banned==false,"Lawyer is banned from joining or performing any contract actions!");
             assert!(lawyer_info.reputation_points_available>=reputation_staked, "Not enough reputation stake left");
 
             lawyer_info.reputation_points_available -= reputation_staked;
@@ -169,6 +173,7 @@ mod xlran {
             self.cases.write(case_id, case.clone());
             self.case_id.write(case_id + 1);
             self.emit(case);
+            return case_id;
         }
 
         fn ban_lawyer(ref self: ContractState, lawyer_address: ContractAddress){
@@ -185,6 +190,7 @@ mod xlran {
             let caller_address = get_caller_address();
             let votes = self.dao_members.read(caller_address).stake_amount;
             let mut lawyer_info = self.lawyers.read(lawyer_address);
+            assert!(lawyer_info.banned==false,"Lawyer is banned from joining or performing any contract actions!");
             lawyer_info.votes += votes;
             self.lawyers.write(lawyer_address, lawyer_info.clone());
             self.emit(LawyerVoted {
@@ -197,6 +203,7 @@ mod xlran {
             let votes = self.lawyers.read(lawyer_address).votes;
             assert!(votes>=self.total_stake.read()/2,"Lawyer not approved");
             let mut lawyer_info = self.lawyers.read(lawyer_address);
+            assert!(lawyer_info.banned==false,"Lawyer is banned from joining or performing any contract actions!");
             lawyer_info.approved = true;
             self.lawyers.write(lawyer_address, lawyer_info);
             self.emit(LawyerApproved {
@@ -228,6 +235,7 @@ mod xlran {
             self.cases.write(case_id, case.clone());
 
             let mut lawyer_info = self.lawyers.read(lawyer);
+            assert!(lawyer_info.banned==false,"Lawyer is banned from joining or performing any contract actions!");
             lawyer_info.case_count += 1;
             lawyer_info.reputation_points_available += case.reputation_staked;
             if(case.case_pred==case_won){
