@@ -63,4 +63,40 @@ To set up the repository, you'll need to use asdf, a CLI tool that manages multi
    scarb test
    ```
 
+## Contributing and Test Driven Development
 
+At xlRan, we adhere to a test driven development approach for the smart contracts. Consequently, you may observe that certain test cases are currently not passing. This is because we prioritize writing test cases before the actual code. Therefore, any contributions adding new planned features, altering existing features to address bugs, or extending functionality must ensure that the respective test cases pass.
+
+The current test cases for the contracts do the following:
+
+**test_register_lawyer**: Test registering a lawyer and verifying initial state.
+
+**test_dao_member_voting**: Test DAO member voting for a lawyer.
+
+**test_lawyer_approval**: Test the approval process for a lawyer.
+
+**test_register_case**: Test registering a case and verifying its initial state.
+
+**test_ban_lawyer**: Test banning a lawyer and verifying the banned state.
+
+**test_unstaking**: Test unstaking DAO tokens after lawyer approval.
+
+**test_no_double_voting**: Test preventing double voting and unstaking without approval.
+
+**test_dao_vote_on_settlement_oracle**: Test DAO voting on a settlement oracle for a case.
+
+**test_case_settlement**: Test case settlement process and oracle result verification.
+
+**test_case_settlement_post_deadline**: Test case settlement after the deadline.
+
+**test_post_case_money_distribution**: Test money distribution to investors after case resolution.
+
+**test_cant_over_invest**: Test preventing over-investment in a case.
+
+**test_cant_invest_after_deadline**: Test preventing investment after the deadline.
+
+**test_voting_on_dao_fees**: Test DAO voting on fees and verifying the declared fees.
+
+**test_multiple_lawyer_nultiple_voter_scenario**: Test multiple lawyers and voters scenario with approval thresholds.
+
+We plan to extend the test suite very soon and add many more to properly test the smart contracts and ensure they are completely bug-free.
