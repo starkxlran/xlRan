@@ -28,6 +28,39 @@ The reputation of lawyers is intricately tied to their ability to correctly pred
 
 ### Lawyer Cache Case
 
-Lawyers can cache and predict potential case outcomes, offering a unique opportunity for investors to support packages of these cases. By funding these case packages, investors not only stand to reap the rewards of successful cases but also contribute to the growth and success of legal professionals.
+Lawyers can cache and predict potential case outcomes, offering a unique opportunity for investors to support packages of these cases. By funding these case packages, investors not only stand to reap the rewards of successful cases but also contribute to the growth and success of legal professionals. Investor's shall receive 30% of the case settlment value incase the case is successful.
 
 Furthermore, a portion of the rewards generated from successful case outcomes is distributed to the lawyer, creating an incentivized ecosystem that fosters attorney-client collaboration. Performance records are maintained over the blockchain for each lawyer, providing a comprehensive overview of their track record, while the amount of reputation they can stake is carefully regulated to ensure a fair and equitable system. 
+
+### DAO Fees and Oracle Voting
+
+In the DAO, members have the autonomy to vote on which case oracle to utilize for each specific case. Additionally, they have the authority to vote and determine the percentage of settlement funds allocated as a reward for each member who votes to add the attorney to the system.
+
+## Setting up the repository
+
+To set up the repository, you'll need to use asdf, a CLI tool that manages multiple language runtime versions on a per-project basis, and install Cairo, the programming language in which Starkent smart contracts are written. Follow these steps to get started:
+
+1. **Setting up asdf:**
+   To install asdf, the recommended tool for installing Cairo, refer to the installation guide at https://asdf-vm.com/guide/getting-started.html.
+
+2. **Installing Cairo and Scarb:**
+   In your terminal, run the following commands to install Cairo and Scarb (Scarb is Cairo's build toolchain and package manager):
+   ```console
+   asdf plugin add scarb
+   asdf install scarb 2.6.3
+   asdf global scarb 2.6.3
+   ```
+
+3. **Building the program:**
+   Navigate to the xlran folder in the git repository and use the following command to build the program:
+   ```console
+   scarb build
+   ```
+
+4. **Running the test suite:**
+   To run the test suite, execute the following command in the xlran folder:
+   ```console
+   scarb test
+   ```
+
+
