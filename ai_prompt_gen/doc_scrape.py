@@ -26,12 +26,15 @@ def get_all_links(domain):
         print(f"Web scraping failed: {e}")
     return urls
 
-def extract_chapter_info(url):
+def extract_chapter_info(url, include_appendix=True, min_chapter=1, max_chapter=10):
     """
     Extract chapter or appendix information from a URL.
 
     Args:
         url (str): The URL to extract information from.
+        include_appendix (bool): Whether to include appendix URLs.
+        min_chapter (int): Minimum chapter number to include.
+        max_chapter (int): Maximum chapter number to include.
 
     Returns:
         tuple: A tuple containing the type ('chapter', 'end_appendix', or 'other') and relevant numbers.
@@ -39,8 +42,10 @@ def extract_chapter_info(url):
     chapter_match = re.search(r'ch(\d+)-(\d+)-', url)
     appendix_match = re.search(r'appendix-(\d+)', url)
     if chapter_match:
-        return ('chapter', int(chapter_match.group(1)), int(chapter_match.group(2)))
-    elif appendix_match:
+        chapter_num = int(chapter_match.group(1))
+        if min_chapter <= chapter_num <= max_chapter:
+            return ('chapter', chapter_num, int(chapter_match.group(2)))
+    elif appendix_match and include_appendix:
         return ('end_appendix', int(appendix_match.group(1)))
     return ('other',)
 
@@ -92,9 +97,12 @@ if __name__ == "__main__":
         # Get all links from the domain
         urls = get_all_links(f"https://{domain}")
         
-        # Extract chapter info and sort URLs
-        sorted_urls = sorted(urls, key=lambda url: extract_chapter_info(url))
+        # Filter URLs based on chapter info
+        filtered_urls = [url for url in urls if extract_chapter_info(url)[0] != 'other']
         
+        # Sort URLs based on chapter info
+        sorted_urls = sorted(filtered_urls, key=lambda url: extract_chapter_info(url))
+
         # Fetch text and write to file
         with open(f"{domain}.txt", "w", encoding="utf-8") as file:
             for url in sorted_urls:
