@@ -232,3 +232,125 @@ fn test_multiple_lawyer_nultiple_voter_scenario() {
     
     dispatcher_2.approve_lawyer(lawyer_2);
 }
+
+#[test]
+fn test_prevent_duplicate_lawyer_registration() {
+    let dispatcher = setup_contract();
+    let lawyer_address = dispatcher.register_lawyer("aa");
+    
+    // Attempt to register the same lawyer again
+    let result = dispatcher.register_lawyer("aa");
+    assert!(result.is_err(), "Should not allow duplicate lawyer registration");
+}
+
+#[test]
+fn test_case_registration_with_invalid_parameters() {
+    let dispatcher = setup_contract();
+    dispatcher.register_dao_amount(1);
+
+    let lawyer_address = dispatcher.register_lawyer("aa");
+    dispatcher.vote_lawyer(lawyer_address);
+    dispatcher.approve_lawyer(lawyer_address);
+
+    // Attempt to register case with negative amount
+    let result = dispatcher.register_case("a", true, -1, 1, 1);
+    assert!(result.is_err(), "Should not allow negative case amount");
+
+    // Attempt to register case with unrealistic deadline (e.g., past deadline)
+    let result = dispatcher.register_case("a", true, 1, 0, 1);
+    assert!(result.is_err(), "Should not allow past deadline");
+}
+
+#[test]
+fn test_oracle_voting_after_case_resolution() {
+    let dispatcher = setup_contract();
+    dispatcher.register_dao_amount(3);
+
+    let lawyer = dispatcher.register_lawyer("lawyer");
+    dispatcher.approve_lawyer(lawyer);
+
+    let case_id = dispatcher.register_case("case1", true, 1000, 1000000000, 1000);
+    let oracle: ContractAddress = contract_address_const::<1>();
+
+    dispatcher.vote_case_oracle(case_id, oracle);
+    dispatcher.declare_oracle(case_id, oracle);
+
+    dispatcher.mark_case_resolved(case_id, true, 1000);
+
+    // Attempt to vote for oracle after case is resolved
+    let result = dispatcher.vote_case_oracle(case_id, oracle);
+    assert!(result.is_err(), "Should not allow oracle voting after case resolution");
+}
+
+#[test]
+fn test_multiple_investors_distribution() {
+    let dispatcher = setup_contract();
+    dispatcher.register_dao_amount(3);
+
+    let lawyer = dispatcher.register_lawyer("lawyer");
+    dispatcher.approve_lawyer(lawyer);
+
+    let case_id = dispatcher.register_case("case1", true, 1000, 1000000000, 1000);
+    let oracle: ContractAddress = contract_address_const::<1>();
+
+    dispatcher.vote_case_oracle(case_id, oracle);
+    dispatcher.declare_oracle(case_id, oracle);
+
+    // Multiple investors
+    dispatcher.invest_money(case_id, 100);  // Investor 1
+    let dispatcher2 = IxlranDispatcher { contract_address: dispatcher.contract_address };
+    dispatcher2.invest_money(case_id, 200);  // Investor 2
+
+    dispatcher.mark_case_resolved(case_id, true, 1000);
+
+    // Check distribution
+    let investor1_money = dispatcher.get_investor_pending_money(case_id);
+    let investor2_money = dispatcher2.get_investor_pending_money(case_id);
+
+    assert_eq!(investor1_money, 100);
+    assert_eq!(investor2_money, 200);
+
+    let claimed1 = dispatcher.claim_investor_money(case_id);
+    let claimed2 = dispatcher2.claim_investor_money(case_id);
+
+    assert_eq!(claimed1, 100);
+    assert_eq!(claimed2, 200);
+}
+
+#[test]
+fn test_banned_lawyer_restrictions() {
+    let dispatcher = setup_contract();
+    let lawyer_address = dispatcher.register_lawyer("aa");
+
+    dispatcher.ban_lawyer(lawyer_address);
+
+    // Attempt to register a new case with banned lawyer
+    let result = dispatcher.register_case("a", true, 1000, 1000000000, 1000);
+    assert!(result.is_err(), "Banned lawyer should not be able to register new cases");
+
+    // Attempt to vote (if lawyers can vote)
+    let result = dispatcher.vote_lawyer(lawyer_address);
+    assert!(result.is_err(), "Banned lawyer should not be able to vote");
+}
+
+#[test]
+fn test_unstaking_with_pending_votes() {
+    let dispatcher = setup_contract();
+    dispatcher.register_dao_amount(2);
+
+    let lawyer = dispatcher.register_lawyer("lawyer");
+    dispatcher.vote_lawyer(lawyer);
+
+    // Attempt to unstake with pending lawyer vote
+    let result = dispatcher.unstake_dao();
+    assert!(result.is_err(), "Should not be able to unstake with pending lawyer vote");
+
+    dispatcher.approve_lawyer(lawyer);
+    let case_id = dispatcher.register_case("case1", true, 1000, 1000000000, 1000);
+    let oracle: ContractAddress = contract_address_const::<1>();
+    dispatcher.vote_case_oracle(case_id, oracle);
+
+    // Attempt to unstake with pending case oracle vote
+    let result = dispatcher.unstake_dao();
+    assert!(result.is_err(), "Should not be able to unstake with pending case oracle vote");
+}
