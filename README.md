@@ -99,4 +99,16 @@ The current test cases for the contracts do the following:
 
 **test_multiple_lawyer_nultiple_voter_scenario**: Test multiple lawyers and voters scenario with approval thresholds.
 
+**test_prevent_duplicate_lawyer_registration**: Test preventing duplicate lawyer registration.
+
+**test_case_registration_with_invalid_parameters**: Test case registration with invalid parameters.
+
+**test_oracle_voting_after_case_resolution**: Test preventing oracle voting after case resolution.
+
+**test_multiple_investors_distribution**: Test money distribution among multiple investors after case resolution.
+
+**test_banned_lawyer_restrictions**: Test restrictions on banned lawyers.
+
+**test_unstaking_with_pending_votes**: Test preventing unstaking with pending votes.
+
 We plan to extend the test suite very soon and add many more to properly test the smart contracts and ensure they are completely bug-free.
