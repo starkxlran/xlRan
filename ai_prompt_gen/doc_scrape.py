@@ -4,6 +4,15 @@ from urllib.parse import urljoin, urlparse
 import re
 
 def get_all_links(domain):
+    """
+    Fetch all internal links from the given domain.
+
+    Args:
+        domain (str): The domain to scrape for links.
+
+    Returns:
+        set: A set of URLs found within the same domain.
+    """
     urls = set()
     try:
         response = requests.get(domain)
@@ -18,6 +27,15 @@ def get_all_links(domain):
     return urls
 
 def extract_chapter_info(url):
+    """
+    Extract chapter or appendix information from a URL.
+
+    Args:
+        url (str): The URL to extract information from.
+
+    Returns:
+        tuple: A tuple containing the type ('chapter', 'end_appendix', or 'other') and relevant numbers.
+    """
     chapter_match = re.search(r'ch(\d+)-(\d+)-', url)
     appendix_match = re.search(r'appendix-(\d+)', url)
     if chapter_match:
@@ -27,6 +45,15 @@ def extract_chapter_info(url):
     return ('other',)
 
 def fetch_text_from_url(url):
+    """
+    Fetch the text content from a given URL.
+
+    Args:
+        url (str): The URL to fetch text from.
+
+    Returns:
+        str: The text content of the page.
+    """
     try:
         response = requests.get(url)
         soup = BeautifulSoup(response.text, 'html.parser')
@@ -36,6 +63,15 @@ def fetch_text_from_url(url):
         return ""
 
 def clean_text(text):
+    """
+    Clean the text by removing excessive empty lines.
+
+    Args:
+        text (str): The text to clean.
+
+    Returns:
+        str: The cleaned text.
+    """
     lines = text.splitlines()
     cleaned_lines = []
     empty_line_count = 0
@@ -53,6 +89,7 @@ def clean_text(text):
 if __name__ == "__main__":
     domains = ["book.cairo-lang.org", "book.starknet.io"]
     for domain in domains:
+        # Get all links from the domain
         urls = get_all_links(f"https://{domain}")
         
         # Extract chapter info and sort URLs
