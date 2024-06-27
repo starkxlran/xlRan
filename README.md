@@ -65,7 +65,7 @@ To set up the repository, you'll need to use asdf, a CLI tool that manages multi
 
 ## Contributing and Test Driven Development
 
-At xlRan, we adhere to a test driven development approach for the smart contracts. Consequently, you may observe that certain test cases are currently not passing. This is because we prioritize writing test cases before the actual code. Therefore, any contributions adding new planned features, altering existing features to address bugs, or extending functionality must ensure that the respective test cases pass.
+At xlRan, we adhere to a test driven development approach for the smart contracts. Consequently, you may observe that certain test cases are currently not passing. This is because we prioritize writing test cases before the actual code. Therefore, any contributions adding new planned features, altering existing features to address bugs, or extending functionality must ensure that the respective test cases pass. The test suite can be found in the [test folder](https://github.com/tanmaymunjal/xlRan/tree/main/xlran/tests).
 
 The current test cases for the contracts do the following:
 
