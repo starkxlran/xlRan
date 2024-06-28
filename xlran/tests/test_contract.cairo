@@ -115,7 +115,6 @@ fn test_dao_vote_on_settlement_oracle() {
     let oracle: ContractAddress = contract_address_const::<1>();
 
     dispatcher.vote_case_oracle(case_id, oracle);
-    dispatcher.declare_oracle(case_id, oracle);
 
     let test_oracle = dispatcher.get_case_oracle(case_id);
     assert_eq!(test_oracle, oracle);
@@ -132,7 +131,6 @@ fn test_case_settlement() {
     let case_id = dispatcher.register_case("case1", true, 1000,1000000000,1000);
 
     dispatcher.vote_case_oracle(case_id, oracle);
-    dispatcher.declare_oracle(case_id, oracle);
 
     assert_eq(dispatcher.mark_case_resolved(case_id, true, 1000),dispatcher.get_oracle_result(case_id));
 }
@@ -148,7 +146,6 @@ fn test_case_settlement_post_deadline() {
     let case_id = dispatcher.register_case("case1", true, 1000, 1,1000);
 
     dispatcher.vote_case_oracle(case_id, oracle);
-    dispatcher.declare_oracle(case_id, oracle);
     sleep(1);
     assert_eq(dispatcher.mark_case_resolved(case_id, true, 1000),dispatcher.get_oracle_result(case_id));
 }
@@ -162,7 +159,6 @@ fn test_post_case_money_distribution() {
     dispatcher.approve_lawyer(lawyer);
     let case_id = dispatcher.register_case("case1", true, 1000, 1000000000,1000);
     dispatcher.vote_case_oracle(case_id, oracle);
-    dispatcher.declare_oracle(case_id, oracle);
     dispatcher.invest_money(case_id,300);
     assert_eq(dispatcher.mark_case_resolved(case_id, true, 1000),dispatcher.get_oracle_result(case_id));
 
@@ -181,7 +177,6 @@ fn test_cant_over_invest() {
     dispatcher.approve_lawyer(lawyer);
     let case_id = dispatcher.register_case("case1", true, 1000, 1000000000,1000);
     dispatcher.vote_case_oracle(case_id, oracle);
-    dispatcher.declare_oracle(case_id, oracle);
     assert!(dispatcher.invest_money(case_id,1000).is_err(),"Investment above 30% of case value are not allowed!");
 }
 
@@ -194,7 +189,7 @@ fn test_cant_invest_after_deadline() {
     dispatcher.approve_lawyer(lawyer);
     let case_id = dispatcher.register_case("case1", true, 1000, 1,1000);
     dispatcher.vote_case_oracle(case_id, oracle);
-    dispatcher.declare_oracle(case_id, oracle);
+
     sleep(1);
     assert!(dispatcher.invest_money(case_id,1000).is_err(),"Investment should not be possible after deadline!");
 }
@@ -273,7 +268,6 @@ fn test_oracle_voting_after_case_resolution() {
     let oracle: ContractAddress = contract_address_const::<1>();
 
     dispatcher.vote_case_oracle(case_id, oracle);
-    dispatcher.declare_oracle(case_id, oracle);
 
     dispatcher.mark_case_resolved(case_id, true, 1000);
 
@@ -294,7 +288,6 @@ fn test_multiple_investors_distribution() {
     let oracle: ContractAddress = contract_address_const::<1>();
 
     dispatcher.vote_case_oracle(case_id, oracle);
-    dispatcher.declare_oracle(case_id, oracle);
 
     // Multiple investors
     dispatcher.invest_money(case_id, 100);  // Investor 1

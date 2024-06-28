@@ -19,6 +19,12 @@ pub trait Ixlran<TContractState> {
     fn mark_case_resolved(ref self: TContractState, case_id: u64, case_won: bool, case_settlment: u64) -> bool;
     fn get_lawyer_info(self: @TContractState, lawyer_address: ContractAddress) -> (ByteArray, bool, bool, u64);
     fn read_case(self: @TContractState, case_id: u64) -> (ContractAddress, ByteArray, u8);
+    fn vote_dao_fees(ref self: TContractState, voted_dao_fee_state: u8);
+    fn declare_new_dao_fee(ref self: TContractState, declared_new_fee: u8) -> u8;
+    fn unvote_dao_fees(ref self: TContractState);
+    fn vote_oracle(ref self: TContractState, case_id: u64, oracle_addr: ContractAddress);
+    fn get_dao_fees(self: @TContractState) -> u8;
+    fn get_case_oracle(self: @TContractState, case_id: u64) -> ContractAddress;
 }
 
 #[starknet::contract]
@@ -31,8 +37,13 @@ mod xlran {
         lawyers: LegacyMap::<ContractAddress, LawyerInfo>,
         cases: LegacyMap::<u64, Case>,
         dao_members: LegacyMap::<ContractAddress, Stake>,
+        fee_votes: LegacyMap::<u8,u64>,
+        dao_fee_votes: LegacyMap::<ContractAddress, u8>,
+        oracle_votes: LegacyMap::<(ContractAddress,u64),u64>,
+        case_oracle: LegacyMap::<u64, CaseOracle>,
         total_stake: u64,
-        case_id: u64
+        case_id: u64,
+        dao_fees: u8,
     }
 
     #[event]
@@ -45,7 +56,11 @@ mod xlran {
         LawyerVoted: LawyerVoted,
         LawyerApproved: LawyerApproved,
         DaoMemberRemoved: DaoMemberRemoved,
-        CaseResolved: CaseResolved
+        CaseResolved: CaseResolved,
+        DaoFeesVote: DaoFeesVote,
+        NewDaoFeeDeclared: NewDaoFeeDeclared,
+        DaoFeesUnvoted: DaoFeesUnvoted,
+        OracleVoted: OracleVoted,
     }
 
     #[derive(Drop, Serde, Clone, starknet::Store, starknet::Event)]
@@ -58,13 +73,13 @@ mod xlran {
         case_count: u64,
         case_correctly_pred: u64,
         reputation: u64,
-        reputation_points_available: u64
+        reputation_points_available: u64,
+        approve_deadline: u64
     }
 
     #[derive(Drop, Serde, starknet::Store)]
     struct Stake {
         stake_amount: u64,
-        at_time: u64,
     }
 
     #[derive(Drop, Serde, Clone, starknet::Store, starknet::Event)]
@@ -78,6 +93,12 @@ mod xlran {
         reputation_staked: u64,
         case_deadline: u64,
         case_pred_settlment: u64
+    }
+
+    #[derive(Drop, Serde, starknet::Store)]
+    struct CaseOracle {
+        oracle: ContractAddress,
+        votes: u64
     }
 
     #[derive(Drop, starknet::Event)]
@@ -116,6 +137,40 @@ mod xlran {
         lawyer_pred: bool,
     }
 
+    #[derive(Drop, starknet::Event)]
+    struct DaoFeesVote {
+        dao_member: ContractAddress,
+        vote_amount: u64,
+        ideal_state: u8
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct NewDaoFeeDeclared {
+        new_dao_fee: u8
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct DaoFeesUnvoted {
+        dao_fees_unvoted: u8,
+        unvote_amount: u64,
+        dao_member: ContractAddress
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct OracleVoted {
+        case_id: u64,
+        oracle: ContractAddress,
+        voter: ContractAddress,
+        votes: u64,
+        most_voted_oracle: ContractAddress
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct OracleDeclared {
+        case_id: u64,
+        oracle_addr: ContractAddress,
+    }
+
     #[constructor]
     fn constructor(ref self: ContractState) {
         self.owner.write(get_caller_address());
@@ -127,11 +182,11 @@ mod xlran {
             let caller_adrr = get_caller_address();
             let curr_timestamp = get_block_timestamp();
             assert!(self.dao_members.read(caller_adrr).stake_amount == 0, "You have already staked");
-            
+
             let stake = Stake {
                 stake_amount,
-                at_time: curr_timestamp
             };
+
             self.dao_members.write(caller_adrr, stake);
             self.total_stake.write(self.total_stake.read() + stake_amount);
             
@@ -146,6 +201,7 @@ mod xlran {
             let lawyer_address = get_caller_address();
             assert!(!self.lawyers.read(lawyer_address).banned, "Lawyer is banned from joining or performing any contract actions!");
             
+            let thirty_days = 30*24*60*60;
             let lawyer = LawyerInfo {
                 ipfs_hash: ipfs_hash.clone(),
                 approved: false,
@@ -154,7 +210,8 @@ mod xlran {
                 case_count: 0,
                 case_correctly_pred: 0,
                 reputation: 0,
-                reputation_points_available: 100
+                reputation_points_available: 100,
+                approve_deadline: get_block_timestamp()+thirty_days
             };
             self.lawyers.write(lawyer_address, lawyer.clone());
             self.emit(lawyer);
@@ -211,6 +268,8 @@ mod xlran {
             let votes = self.dao_members.read(caller_address).stake_amount;
             let mut lawyer_info = self.lawyers.read(lawyer_address);
             assert!(!lawyer_info.banned, "Lawyer is banned from joining or performing any contract actions!");
+            assert!(get_block_timestamp()<=lawyer_info.approve_deadline,"Lawyer approve deadline has passed");
+
             lawyer_info.votes += votes;
             self.lawyers.write(lawyer_address, lawyer_info.clone());
             self.emit(LawyerVoted {
@@ -224,6 +283,7 @@ mod xlran {
             assert!(votes >= self.total_stake.read() / 2, "Lawyer not approved");
             let mut lawyer_info = self.lawyers.read(lawyer_address);
             assert!(!lawyer_info.banned, "Lawyer is banned from joining or performing any contract actions!");
+            assert!(get_block_timestamp()<=lawyer_info.approve_deadline,"Lawyer approve deadline has passed");
             lawyer_info.approved = true;
             self.lawyers.write(lawyer_address, lawyer_info);
             self.emit(LawyerApproved { lawyer_address });
@@ -233,7 +293,7 @@ mod xlran {
             let caller_address = get_caller_address();
             let stake = self.dao_members.read(caller_address);
             self.total_stake.write(self.total_stake.read() - stake.stake_amount);
-            self.dao_members.write(caller_address, Stake { stake_amount: 0, at_time: 0 });
+            self.dao_members.write(caller_address, Stake { stake_amount: 0 });
             self.emit(DaoMemberRemoved { dao_member: caller_address });
             return stake.stake_amount;
         }
@@ -270,6 +330,61 @@ mod xlran {
             return oracle_result;
         }
 
+        fn vote_dao_fees(ref self: ContractState, voted_dao_fee_state: u8){
+            let caller_address = get_caller_address();
+
+            assert!(voted_dao_fee_state<30,"DAO fees can not include be over or equal to lawyer compensation");
+            assert!(self.dao_fee_votes.read(caller_address)==0,"You have already voted for another dao fees, please unvote there to vote on this dao fee!");
+
+            let votes = self.dao_members.read(caller_address).stake_amount;
+            let curr_vote = self.fee_votes.read(voted_dao_fee_state);
+            self.fee_votes.write(voted_dao_fee_state,votes+curr_vote);
+            self.dao_fee_votes.write(caller_address,voted_dao_fee_state);
+            self.emit( DaoFeesVote {dao_member: caller_address, ideal_state: voted_dao_fee_state, vote_amount: curr_vote});
+        }
+
+        fn unvote_dao_fees(ref self: ContractState){
+            let caller_address = get_caller_address();
+            let votes = self.dao_members.read(caller_address).stake_amount;
+
+            let voted_on = self.dao_fee_votes.read(caller_address);
+            self.dao_fee_votes.write(caller_address,0);
+            
+            let curr_fee_vote = self.fee_votes.read(voted_on);
+            self.fee_votes.write(voted_on,curr_fee_vote-votes);
+            self.emit(DaoFeesUnvoted{dao_fees_unvoted: voted_on, unvote_amount: votes, dao_member: caller_address});
+        }
+
+        fn declare_new_dao_fee(ref self: ContractState, declared_new_fee: u8) -> u8{
+            assert!(self.fee_votes.read(declared_new_fee)>self.total_stake.read()/2,"Vote amount not enough to declare new dao fees");
+            self.dao_fees.write(declared_new_fee);
+            self.emit(NewDaoFeeDeclared{ new_dao_fee: declared_new_fee });
+            return declared_new_fee;
+        }
+
+        fn vote_oracle(ref self: ContractState, case_id: u64, oracle_addr: ContractAddress){
+            let caller_address = get_caller_address();
+            let votes = self.dao_members.read(caller_address).stake_amount;
+
+            let key = (oracle_addr, case_id);
+            let curr_oracle_vote = self.oracle_votes.read(key);
+            let total_votes = curr_oracle_vote+votes;
+            self.oracle_votes.write(key, total_votes);
+            if(total_votes>self.case_oracle.read(case_id).votes){
+                self.case_oracle.write(case_id,CaseOracle{
+                    oracle: oracle_addr,
+                    votes: total_votes
+                });
+            };
+            self.emit(OracleVoted{
+                case_id: case_id,
+                oracle: oracle_addr,
+                voter: caller_address,
+                votes: votes,
+                most_voted_oracle: self.case_oracle.read(case_id).oracle
+            });
+        }
+
         fn get_lawyer_info(self: @ContractState, lawyer_address: ContractAddress) -> (ByteArray, bool, bool, u64) {
             let lawyer_info = self.lawyers.read(lawyer_address);
             (lawyer_info.ipfs_hash, lawyer_info.approved, lawyer_info.banned, lawyer_info.votes)
@@ -278,6 +393,14 @@ mod xlran {
         fn read_case(self: @ContractState, case_id: u64) -> (ContractAddress, ByteArray, u8) {
             let case = self.cases.read(case_id);
             (case.lawyer_address, case.case_ipfs_hash, case.case_status)
+        }
+
+        fn get_dao_fees(self: @ContractState) -> u8{
+            self.dao_fees.read()
+        }
+
+        fn get_case_oracle(self: @ContractState, case_id: u64) -> ContractAddress{
+            self.case_oracle.read(case_id).oracle
         }
     }
 }
