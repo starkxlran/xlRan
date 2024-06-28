@@ -112,3 +112,8 @@ The current test cases for the contracts do the following:
 **test_unstaking_with_pending_votes**: Test preventing unstaking with pending votes.
 
 We plan to extend the test suite very soon and add many more to properly test the smart contracts and ensure they are completely bug-free.
+
+## AI Prompting
+
+AI technology plays a pivotal role in modern software development. Within our ai_prompt_gen folder, you'll find a Python file and two text documents. These files contain documentation for Cairo and Starknet, as indicated by their titles. Leveraging these resources, you can prompt GPT4, Claude Sonnet, or other LLMs as you venture into coding for Starknet. Additionally, you have the flexibility to modify configuration values in the Python file to specify the sections of documentation to scrape. This optimization can help reduce context size tokens, providing improved accuracy and allowing for the utilization of a greater diversity of models.
+
