@@ -25,11 +25,18 @@ pub trait Ixlran<TContractState> {
     fn vote_oracle(ref self: TContractState, case_id: u64, oracle_addr: ContractAddress);
     fn get_dao_fees(self: @TContractState) -> u8;
     fn get_case_oracle(self: @TContractState, case_id: u64) -> ContractAddress;
+    fn invest_in_case(ref self: TContractState, case_id: u64, invest_amount: u64) -> ContractAddress;
+    fn get_contract_token_balance(self: @TContractState) -> u256;
 }
 
 #[starknet::contract]
 mod xlran {
-    use starknet::{ContractAddress, get_caller_address, get_block_timestamp};
+    use core::option::OptionTrait;
+use core::traits::TryInto;
+use openzeppelin::token::erc20::{ERC20Component, ERC20HooksEmptyImpl};
+    use starknet::{ContractAddress, get_caller_address, get_block_timestamp, get_contract_address};
+
+    component!(path: ERC20Component, storage: erc20, event: ERC20Event);
 
     #[storage]
     struct Storage {
@@ -40,10 +47,15 @@ mod xlran {
         fee_votes: LegacyMap::<u8,u64>,
         dao_fee_votes: LegacyMap::<ContractAddress, u8>,
         oracle_votes: LegacyMap::<(ContractAddress,u64),u64>,
+        lawyer_votes: LegacyMap::<(ContractAddress, ContractAddress), u64>,
+        oracle_voter_votes: LegacyMap::<(ContractAddress, u64), u64>,   
+        case_investors: LegacyMap::<(u64,ContractAddress), u64>,
         case_oracle: LegacyMap::<u64, CaseOracle>,
         total_stake: u64,
         case_id: u64,
         dao_fees: u8,
+        #[substorage(v0)]
+        erc20: ERC20Component::Storage
     }
 
     #[event]
@@ -61,6 +73,9 @@ mod xlran {
         NewDaoFeeDeclared: NewDaoFeeDeclared,
         DaoFeesUnvoted: DaoFeesUnvoted,
         OracleVoted: OracleVoted,
+        CaseInvested: CaseInvested,
+        #[flat]
+        ERC20Event: ERC20Component::Event
     }
 
     #[derive(Drop, Serde, Clone, starknet::Store, starknet::Event)]
@@ -92,7 +107,9 @@ mod xlran {
         case_pred: bool,
         reputation_staked: u64,
         case_deadline: u64,
-        case_pred_settlment: u64
+        case_pred_settlment: u64,
+        case_investment: u64,
+        case_act_settlment: u64
     }
 
     #[derive(Drop, Serde, starknet::Store)]
@@ -135,6 +152,7 @@ mod xlran {
         lawyer: ContractAddress,
         case_won: bool,
         lawyer_pred: bool,
+        case_settlment: u64
     }
 
     #[derive(Drop, starknet::Event)]
@@ -171,10 +189,30 @@ mod xlran {
         oracle_addr: ContractAddress,
     }
 
+    #[derive(Drop, starknet::Event)]
+    struct CaseInvested {
+        case_id: u64,
+        investor: ContractAddress,
+        amount: u64
+    }
+
+    // ERC20 Mixin
+    #[abi(embed_v0)]
+    impl ERC20MixinImpl = ERC20Component::ERC20MixinImpl<ContractState>;
+    impl ERC20InternalImpl = ERC20Component::InternalImpl<ContractState>;
+
     #[constructor]
     fn constructor(ref self: ContractState) {
         self.owner.write(get_caller_address());
+
+        // Initialize ERC20
+        let name = "xlran";
+        let symbol = "XLR";
+        let initial_supply = 1000000;
+        self.erc20.initializer(name, symbol);
+        self.erc20.mint(self.owner.read(), initial_supply);
     }
+
 
     #[abi(embed_v0)]
     impl xlran of super::Ixlran<ContractState> {
@@ -189,7 +227,7 @@ mod xlran {
 
             self.dao_members.write(caller_adrr, stake);
             self.total_stake.write(self.total_stake.read() + stake_amount);
-            
+            self.erc20.transfer(get_contract_address(),stake_amount.try_into().unwrap());
             self.emit(StakeEvent {
                 lawyer_address: caller_adrr,
                 stake_amount,
@@ -200,7 +238,8 @@ mod xlran {
         fn register_lawyer(ref self: ContractState, ipfs_hash: ByteArray) -> ContractAddress {
             let lawyer_address = get_caller_address();
             assert!(!self.lawyers.read(lawyer_address).banned, "Lawyer is banned from joining or performing any contract actions!");
-            
+            assert!(self.lawyers.read(lawyer_address).approve_deadline==0,"Lawyer already exists!");
+
             let thirty_days = 30*24*60*60;
             let lawyer = LawyerInfo {
                 ipfs_hash: ipfs_hash.clone(),
@@ -232,7 +271,7 @@ mod xlran {
             assert!(lawyer_info.approved, "Lawyer not approved");
             assert!(!lawyer_info.banned, "Lawyer is banned from joining or performing any contract actions!");
             assert!(lawyer_info.reputation_points_available >= reputation_staked, "Not enough reputation stake left");
-            assert!(get_block_timestamp() <= case_deadline, "Case deadline has passed");
+            assert!(get_block_timestamp() < case_deadline, "Case deadline has passed");
 
             lawyer_info.reputation_points_available -= reputation_staked;
             self.lawyers.write(lawyer_address, lawyer_info);
@@ -246,10 +285,12 @@ mod xlran {
                 case_pred,
                 reputation_staked,
                 case_deadline,
-                case_pred_settlment
+                case_pred_settlment,
+                case_investment: 0,
+                case_act_settlment: 0
             };
 
-            self.cases.write(case_id, case.clone());
+            self.cases.write(case_id, case.clone());    
             self.case_id.write(case_id + 1);
             self.emit(case);
             case_id
@@ -270,6 +311,9 @@ mod xlran {
             assert!(!lawyer_info.banned, "Lawyer is banned from joining or performing any contract actions!");
             assert!(get_block_timestamp()<=lawyer_info.approve_deadline,"Lawyer approve deadline has passed");
 
+            let mut voter_votes = self.lawyer_votes.read((caller_address, lawyer_address));
+            assert!(voter_votes == 0, "You have already voted for this lawyer");
+        
             lawyer_info.votes += votes;
             self.lawyers.write(lawyer_address, lawyer_info.clone());
             self.emit(LawyerVoted {
@@ -291,10 +335,12 @@ mod xlran {
 
         fn unstake_dao(ref self: ContractState) -> u64 {
             let caller_address = get_caller_address();
+            assert!(self.dao_fee_votes.read(caller_address)==0,"You have an active vote on dao fees, please unstake it to exit from the dao!");
             let stake = self.dao_members.read(caller_address);
             self.total_stake.write(self.total_stake.read() - stake.stake_amount);
             self.dao_members.write(caller_address, Stake { stake_amount: 0 });
             self.emit(DaoMemberRemoved { dao_member: caller_address });
+            self.erc20.transfer(caller_address,stake.stake_amount.try_into().unwrap());
             return stake.stake_amount;
         }
 
@@ -305,6 +351,7 @@ mod xlran {
             assert!(case.lawyer_address == lawyer, "You are not the lawyer of this case");
             
             case.case_status = if case_won { 1 } else { 2 };
+            case.case_act_settlment = case_settlment;
             self.cases.write(case_id, case.clone());
 
             let mut lawyer_info = self.lawyers.read(lawyer);
@@ -317,7 +364,11 @@ mod xlran {
                 lawyer_info.case_correctly_pred += 1;
                 lawyer_info.reputation += case.reputation_staked;
             } else {
-                lawyer_info.reputation -= case.reputation_staked;
+                if(lawyer_info.reputation<case.reputation_staked){
+                    lawyer_info.reputation = 0;
+                }else{
+                    lawyer_info.reputation -= case.reputation_staked;
+                };
             }
             
             self.lawyers.write(lawyer, lawyer_info);
@@ -325,7 +376,8 @@ mod xlran {
                 case_id,
                 lawyer,
                 case_won,
-                lawyer_pred: case.case_pred
+                lawyer_pred: case.case_pred,
+                case_settlment: case_settlment
             });
             return oracle_result;
         }
@@ -365,7 +417,13 @@ mod xlran {
         fn vote_oracle(ref self: ContractState, case_id: u64, oracle_addr: ContractAddress){
             let caller_address = get_caller_address();
             let votes = self.dao_members.read(caller_address).stake_amount;
+            let case = self.cases.read(case_id);
 
+            assert!(case.case_deadline>=get_block_timestamp(),"Case has already closed, can no longer vote on oracles for this case");
+            // Add a new storage variable to track votes
+            let voter_votes = self.oracle_voter_votes.read((caller_address, case_id));
+            assert!(voter_votes == 0, "You have already voted for an oracle in this case");
+        
             let key = (oracle_addr, case_id);
             let curr_oracle_vote = self.oracle_votes.read(key);
             let total_votes = curr_oracle_vote+votes;
@@ -385,6 +443,30 @@ mod xlran {
             });
         }
 
+        fn invest_in_case(ref self: ContractState, case_id: u64, invest_amount: u64) -> ContractAddress{
+            let caller_address = get_caller_address();
+
+            let mut case = self.cases.read(case_id);
+            let curr_inv = case.case_investment;
+            let new_inv = curr_inv+invest_amount;
+            assert!(10*new_inv<=3*case.case_pred_settlment,"Can not invest over maximum comission");
+
+            case.case_investment = new_inv;
+            self.cases.write(case_id,case);
+
+            let key = (case_id,caller_address);
+            let curr_voter_inv = self.case_investors.read(key);
+            self.case_investors.write(key,curr_voter_inv+invest_amount);
+            self.erc20.transfer(caller_address,invest_amount.try_into().unwrap());
+            self.emit(CaseInvested{
+                case_id: case_id,
+                investor: caller_address,
+                amount: invest_amount
+            });
+            return caller_address;
+        }
+
+
         fn get_lawyer_info(self: @ContractState, lawyer_address: ContractAddress) -> (ByteArray, bool, bool, u64) {
             let lawyer_info = self.lawyers.read(lawyer_address);
             (lawyer_info.ipfs_hash, lawyer_info.approved, lawyer_info.banned, lawyer_info.votes)
@@ -401,6 +483,10 @@ mod xlran {
 
         fn get_case_oracle(self: @ContractState, case_id: u64) -> ContractAddress{
             self.case_oracle.read(case_id).oracle
+        }
+
+        fn get_contract_token_balance(self: @ContractState) -> u256{
+            self.erc20.balanceOf(self.owner.read())
         }
     }
 }
